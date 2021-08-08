@@ -1,0 +1,79 @@
+---
+# PLAY-1
+- name: play 1- Configure Apache for httpd
+  hosts: db
+  become: yes
+  gather_facts: True
+  roles:
+    - apache
+    - tomcat
+
+#PLAY-2
+- name: play 2 - Configure Apache for httpd
+  hosts: db
+  become: yes
+  tasks:
+    - name: Remove file (delete file)
+      file:
+        path: /etc/httpd/conf.d/virtual.conf
+        state: absent
+      notify:
+        - reload apache
+
+    - name: copy the xyz.com code
+      copy:
+        src: /etc/ansible/xyz-com/index.html
+        dest: /var/www/html/index.html
+        owner: root
+
+  handlers:
+    - name: reload apache
+      service:
+        name: httpd
+        state: reloaded
+        
+# PLAY-3
+- name: Play 3 - Python Install
+  hosts: db
+  become: yes
+  tasks:
+    - name: Install Python 3.6
+      yum:
+        name: python36
+        state: present
+      tags: python-install
+
+    - name: alternatives
+      alternatives:
+        name: python
+        link: /usr/bin/python3.6
+        path: /usr/bin/python3
+      tags: python-alternatives
+
+#PLAY-4
+- name: Play 4 - Python library install and copying of War file
+  hosts: db
+  become: yes
+  vars:
+          ansible_python_interpreter: /usr/bin/python
+  tasks:
+    - name: Install boto3 and botocore with pip3 module
+      pip:
+        name:
+          - boto3
+          - botocore
+        executable: pip3.6
+      tags: boto-lib-install
+
+    - name: copy the war file
+      aws_s3:
+        bucket: artifactory-15june2021
+        object: LoginRegisterApp.war
+        dest: /etc/apache-tomcat-8.5.69/webapps/LoginRegisterApp.war
+        mode: get
+      tags: copy-war
+
+    - name: tomcat-restart
+      ansible.builtin.shell: sh startup.sh ; sleep 2 ;sh stutdown.sh ; sleep 2 ; sh startup.sh &
+      args:
+        chdir: /etc/apache-tomcat-8.5.69/bin/
